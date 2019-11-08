@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.1](https://github.com/boneskull/buggin/compare/v0.1.0...v0.1.1) (2019-11-08)
+
+### Bug Fixes
+
+- **pkg:** remove private flag! ([3d7220f](https://github.com/boneskull/buggin/commit/3d7220f551c7b28f3a6d3a16a9c9c5f759b8ede6))
+
 ## 0.1.0 (2019-11-08)
 
 ### Features
