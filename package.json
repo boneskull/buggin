@@ -1,7 +1,6 @@
 {
   "name": "buggin",
   "version": "0.1.0",
-  "private": true,
   "description": "Help your users report errors! For CLI apps.",
   "main": "src/index.js",
   "scripts": {
