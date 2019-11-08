@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.2](https://github.com/boneskull/buggin/compare/v0.1.1...v0.1.2) (2019-11-08)
+
+### Bug Fixes
+
+- **pkg:** use files field ([e0bcf21](https://github.com/boneskull/buggin/commit/e0bcf21215602055e63ed8d42cc4107460c0b9fb))
+
 ### [0.1.1](https://github.com/boneskull/buggin/compare/v0.1.0...v0.1.1) (2019-11-08)
 
 ### Bug Fixes
