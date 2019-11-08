@@ -21,6 +21,10 @@
   "engines": {
     "node": ">=8"
   },
+  "files": [
+    "src",
+    "assets"
+  ],
   "dependencies": {
     "ansi-colors": "^4.1.1",
     "ansi-escapes": "^4.2.1",
