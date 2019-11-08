@@ -1,14 +1,13 @@
 {
-  "name": "packagename",
-  "version": "0.0.0",
+  "name": "buggin",
+  "version": "0.1.0",
   "private": true,
-  "description": "Shankle short loin porchetta strip steak tongue drumstick shoulder shank turkey pork loin picanha flank.",
+  "description": "Help your users report errors! For CLI apps.",
   "main": "src/index.js",
   "scripts": {
     "posttest": "markdownlint --ignore node_modules . && eslint .",
     "test": "nyc mocha \"test/**/*.spec.js\"",
-    "release": "standard-version",
-    "yikes": "exit 1"
+    "release": "standard-version -a"
   },
   "repository": {
     "type": "git",
