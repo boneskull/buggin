@@ -7,11 +7,15 @@
   "scripts": {
     "posttest": "markdownlint --ignore node_modules . && eslint .",
     "test": "nyc mocha \"test/**/*.spec.js\"",
-    "release": "standard-version"
+    "release": "standard-version",
+    "yikes": "exit 1"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/boneskull/packagename"
+    "url": "https://github.com/boneskull/buggin"
+  },
+  "bugs": {
+    "url": "https://github.com/boneskull/buggin/issues"
   },
   "keywords": [],
   "author": "Christopher Hiller <boneskull@boneskull.com> (https://boneskull.com/)",
@@ -19,8 +23,19 @@
   "engines": {
     "node": ">=8"
   },
-  "dependencies": {},
+  "dependencies": {
+    "ansi-colors": "^4.1.1",
+    "ansi-escapes": "^4.2.1",
+    "find-up": "^4.1.0",
+    "is-email-like": "^1.0.0",
+    "node-emoji": "^1.10.0",
+    "normalize-package-data": "^2.5.0",
+    "read-pkg": "^5.2.0",
+    "supports-hyperlinks": "^2.0.0"
+  },
   "devDependencies": {
+    "@types/mocha": "^5.2.7",
+    "@types/node": "^12.12.6",
     "babel-eslint": "^10.0.3",
     "eslint": "^6.5.1",
     "eslint-config-prettier": "^6.4.0",
@@ -31,6 +46,7 @@
     "eslint-plugin-prettier": "^3.1.1",
     "eslint-plugin-promise": "^4.2.1",
     "eslint-plugin-standard": "^4.0.1",
+    "execa": "^3.2.0",
     "husky": "^3.0.9",
     "lint-staged": "^9.4.2",
     "markdownlint-cli": "^0.19.0",
@@ -39,6 +55,8 @@
     "prettier": "^1.18.2",
     "sinon": "^7.5.0",
     "standard-version": "^7.0.0",
+    "type-fest": "^0.8.1",
+    "typescript": "^3.8.0-dev.20191102",
     "unexpected": "^11.8.0",
     "unexpected-sinon": "^10.11.2"
   },
