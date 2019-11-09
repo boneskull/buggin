@@ -15,7 +15,19 @@
   "bugs": {
     "url": "https://github.com/boneskull/buggin/issues"
   },
-  "keywords": [],
+  "keywords": [
+    "error",
+    "exception",
+    "bug",
+    "issue",
+    "ticket",
+    "report",
+    "github",
+    "cli",
+    "prompt",
+    "bugs",
+    "uncaught"
+  ],
   "author": "Christopher Hiller <boneskull@boneskull.com> (https://boneskull.com/)",
   "license": "Apache-2.0",
   "engines": {
