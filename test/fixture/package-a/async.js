@@ -1,4 +1,4 @@
-const buggin = require('../..');
+const buggin = require('../../../src');
 
 buggin(module);
 

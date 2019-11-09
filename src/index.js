@@ -3,12 +3,14 @@ const fs = require('fs');
 const emoji = require('node-emoji');
 const color = require('ansi-colors');
 const {sync: readPkg} = require('read-pkg');
+const {stderr: supportsColor} = require('supports-color');
+
 const kBuggin = Symbol('buggin');
 const kBugginListener = Symbol('buggin-listener');
-
 const bugginPkg = readPkg({cwd: path.join(__dirname, '..')});
 
-const EVENT = 'uncaughtException';
+const EVENT_UNCAUGHT_EXCEPTION = 'uncaughtException';
+const EVENT_UNHANDLED_REJECTION = 'unhandledRejection';
 
 const install = () => {
   if (global[kBuggin]) {
@@ -37,6 +39,14 @@ This is what I was doing when it happened:
   return `${url}/new?${stringify({title, body})}`;
 };
 
+/**
+ *
+ * @param {any} value
+ * @returns {value is Error}
+ */
+const isError = value =>
+  value && typeof value === 'object' && typeof value.stack === 'string';
+
 const buggin = install();
 
 /**
@@ -44,17 +54,22 @@ const buggin = install();
  * @param {string} name
  * @param {string} url
  * @param {string} root
- * @returns {NodeJS.UncaughtExceptionListener}
+ * @returns {NodeJS.UncaughtExceptionListener|NodeJS.UnhandledRejectionListener}
  */
 const createUncaughtExceptionListener = (name, url, root) => {
   const rootRegExp = new RegExp(`${String(root)}(?!node_modules)`);
   const useLink = require('supports-hyperlinks').stderr;
   /**
-   * @type {NodeJS.UncaughtExceptionListener}
+   * @type {NodeJS.UncaughtExceptionListener|NodeJS.UnhandledRejectionListener}
+   * @todo the NodeJS.UncaughtExceptionListener type is incorrect and omits the
+   * second parameter, `origin`, which is going to be "uncaughtException" in
+   * this case.
    */
-  // @ts-ignore
   const listener = (err, origin) => {
-    if (err && typeof err === 'object' && rootRegExp.test(err.stack)) {
+    if (isError(err) && rootRegExp.test(err.stack)) {
+      // @ts-ignore
+      const isPromise = origin && origin !== 'uncaughtException';
+      color.enabled = supportsColor;
       let linkString;
       if (useLink) {
         const {link} = require('ansi-escapes');
@@ -62,14 +77,11 @@ const createUncaughtExceptionListener = (name, url, root) => {
       } else {
         linkString = buildUrl(url, err);
       }
-      fs.writeSync(
-        // @ts-ignore
-        process.stderr.fd,
-        `${color.blackBright('- - - - - - - - - - - - - - - - - -')}
+      let output = `${color.blackBright('- - - - - - - - - - - - - - - - - -')}
 
-${emoji.get(
-  'exclamation'
-)} The following exception is likely a bug in ${color.yellow(name)}.
+${emoji.get('exclamation')} The following ${color.bold(
+        isPromise ? 'unhandled rejection' : 'uncaught exception'
+      )} is likely a bug in ${color.yellow(name)}.
 ${color.italic('Please')} report the issue at: ${linkString}
 
 Thanks! ${emoji.get('heart')}
@@ -78,11 +90,20 @@ Thanks! ${emoji.get('heart')}
 
 ${color.blackBright('- - - - - - - - - - - - - - - - - -')}
 
-`
+`;
+      if (!supportsColor) {
+        output = emoji.strip(output);
+      }
+      fs.writeSync(
+        // @ts-ignore
+        process.stderr.fd,
+        output
       );
     }
     setup.disable();
-    throw err;
+    process.nextTick(() => {
+      throw err; // node-do-not-add-exception-line
+    });
   };
   listener[kBugginListener] = true;
   return listener;
@@ -93,7 +114,14 @@ const flushListenerStack = () => {
     const name = buggin.listenerStack.pop();
     const {url, root} = buggin.config[name];
     process.prependOnceListener(
-      EVENT,
+      EVENT_UNCAUGHT_EXCEPTION,
+      /**
+       * @type {NodeJS.UncaughtExceptionListener}
+       */
+      (createUncaughtExceptionListener(name, url, root))
+    );
+    process.prependOnceListener(
+      EVENT_UNHANDLED_REJECTION,
       createUncaughtExceptionListener(name, url, root)
     );
     delete buggin.config[name];
@@ -210,23 +238,26 @@ const setup = (pkgValue, {force = false, name = '', entryPoint} = {}) => {
 
   buggin.config[pkgName] = {url, root: pkgPath};
 
-  process.nextTick(enable);
-};
-
-const enable = () => {
   buggin.listenerStack.push(...Object.keys(buggin.config));
   flushListenerStack();
 };
 
 /**
- * Remove all listeners
+ * Remove all buggin listeners
  */
 setup.disable = () => {
-  process.listeners(EVENT).forEach(listener => {
-    if (listener[kBugginListener]) {
-      process.removeListener(EVENT, listener);
-    }
-  });
+  process
+    .listeners(EVENT_UNCAUGHT_EXCEPTION)
+    .filter(listener => listener[kBugginListener])
+    .forEach(listener => {
+      process.removeListener(EVENT_UNCAUGHT_EXCEPTION, listener);
+    });
+  process
+    .listeners(EVENT_UNHANDLED_REJECTION)
+    .filter(listener => listener[kBugginListener])
+    .forEach(listener => {
+      process.removeListener(EVENT_UNHANDLED_REJECTION, listener);
+    });
 };
 
 module.exports = setup;

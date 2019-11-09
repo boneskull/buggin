@@ -3,9 +3,6 @@
   "version": "0.0.0",
   "description": "a lovely test fixture",
   "main": "async.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/boneskull/not-a-repo.git"
@@ -15,5 +12,6 @@
   "bugs": {
     "url": "https://github.com/boneskull/buggin/issues"
   },
-  "homepage": "https://github.com/boneskull/not-a-repo#readme"
+  "homepage": "https://github.com/boneskull/not-a-repo#readme",
+  "private": true
 }
