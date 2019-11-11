@@ -55,11 +55,24 @@ describe('buggin', function() {
     describe('when `force` option is `false`', function() {
       it('should print error to console and exit immediately', function() {
         return expect(
-          run('./fixture/package-a/polluted-events'),
+          run('./fixture/package-a/no-force'),
           'to be rejected with error satisfying',
           {
             stderr: /already exist which were not added by buggin/,
             exitCode: 1
+          }
+        );
+      });
+    });
+
+    describe('when `force` option is `true`', function() {
+      it('should display message and allow existing listener to run', function() {
+        return expect(
+          run('./fixture/package-a/force'),
+          'to be fulfilled with value satisfying',
+          {
+            stderr: /should appear after buggin output$/,
+            exitCode: 0
           }
         );
       });

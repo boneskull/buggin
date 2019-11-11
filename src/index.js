@@ -115,9 +115,11 @@ ${color.blackBright('- - - - - - - - - - - - - - - - - -')}
       );
     }
     setup.disable();
-    process.nextTick(() => {
-      throw err; // node-do-not-add-exception-line
-    });
+    if (!hasNonBugginEventListeners()) {
+      process.nextTick(() => {
+        throw err; // node-do-not-add-exception-line
+      });
+    }
   };
   listener[kBugginListener] = true;
   return listener;
