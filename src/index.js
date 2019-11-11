@@ -11,6 +11,16 @@ const bugginPkg = readPkg({cwd: path.join(__dirname, '..')});
 
 const EVENT_UNCAUGHT_EXCEPTION = 'uncaughtException';
 const EVENT_UNHANDLED_REJECTION = 'unhandledRejection';
+/**
+ * Returns `true` if there have been any non-buggin listeners added to our process events
+ */
+const hasNonBugginEventListeners = () =>
+  process
+    .listeners(EVENT_UNCAUGHT_EXCEPTION)
+    .some(listener => !listener[kBugginListener]) ||
+  process
+    .listeners(EVENT_UNHANDLED_REJECTION)
+    .some(listener => !listener[kBugginListener]);
 
 const install = () => {
   if (global[kBuggin]) {
@@ -23,6 +33,10 @@ const install = () => {
   return buggin;
 };
 
+/**
+ * @param {string} url
+ * @param {Error} err
+ */
 const buildUrl = (url, err) => {
   const {stringify} = require('querystring');
   const title = `[buggin] Uncaught exception encountered: ${err.message}`;
@@ -182,12 +196,13 @@ findEntryPoint.cached = undefined;
 
 /**
  * Configures buggin for a module.
- * @param {string|import('type-fest').PackageJson|NodeJS.Module} pkgValue
- * @param {Partial<SetupOptions>} opts
+ * "This function has high cyclomatic complexity"
+ * @param {string|import('type-fest').PackageJson|NodeJS.Module} [pkgValue]
+ * @param {Partial<SetupOptions>} [opts]
  */
 const setup = (pkgValue, {force = false, name = '', entryPoint} = {}) => {
   /**
-   * @type {string?}
+   * @type {string}
    */
   let url;
 
@@ -226,7 +241,7 @@ const setup = (pkgValue, {force = false, name = '', entryPoint} = {}) => {
   const {pkg, pkgPath} = pkgInfo;
 
   if (!pkg) {
-    // probably warn user it didn't work
+    // TODO: probably warn user it didn't work
     return;
   }
 
@@ -237,6 +252,21 @@ const setup = (pkgValue, {force = false, name = '', entryPoint} = {}) => {
   const pkgName = String(name || (pkg && pkg.name));
 
   buggin.config[pkgName] = {url, root: pkgPath};
+
+  if (!force && hasNonBugginEventListeners()) {
+    // we can't just throw out of here, since an uncaught exception listener already
+    // exists.  I mean, I suppose we COULD, but there's much less of a guarantee that this
+    // message would get to the developer.
+    const err = new Error(`process Event listeners already exist which were not added by buggin. This might cause unexpected behavior.
+Pass option \`{force: true}\` to \`buggin()\` to add listeners anyway.
+`);
+    fs.writeSync(
+      // @ts-ignore
+      process.stderr.fd,
+      err.stack
+    );
+    process.exit(1);
+  }
 
   buggin.listenerStack.push(...Object.keys(buggin.config));
   flushListenerStack();

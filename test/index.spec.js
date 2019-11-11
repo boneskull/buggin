@@ -50,4 +50,19 @@ describe('buggin', function() {
       });
     });
   });
+
+  describe('when attempting to add a buggin to a process which already has pertinent event listeners', function() {
+    describe('when `force` option is `false`', function() {
+      it('should print error to console and exit immediately', function() {
+        return expect(
+          run('./fixture/package-a/polluted-events'),
+          'to be rejected with error satisfying',
+          {
+            stderr: /already exist which were not added by buggin/,
+            exitCode: 1
+          }
+        );
+      });
+    });
+  });
 });
