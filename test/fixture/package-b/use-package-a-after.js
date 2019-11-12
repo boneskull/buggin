@@ -1,5 +1,4 @@
 const buggin = require('../../../src');
-
 buggin(module);
 
-throw new Error('sync');
+require('../package-a/sync');

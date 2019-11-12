@@ -3,7 +3,9 @@ const fs = require('fs');
 const emoji = require('node-emoji');
 const color = require('ansi-colors');
 const {sync: readPkg} = require('read-pkg');
+const parentModule = require('parent-module');
 const {stderr: supportsColor} = require('supports-color');
+const {parse: parseStacktrace} = require('stacktrace-parser');
 
 const kBuggin = Symbol('buggin');
 const kBugginListener = Symbol('buggin-listener');
@@ -14,28 +16,57 @@ const EVENT_UNHANDLED_REJECTION = 'unhandledRejection';
 /**
  * Returns `true` if there have been any non-buggin listeners added to our process events
  */
-const hasNonBugginEventListeners = () =>
-  process
-    .listeners(EVENT_UNCAUGHT_EXCEPTION)
-    .some(listener => !listener[kBugginListener]) ||
-  process
-    .listeners(EVENT_UNHANDLED_REJECTION)
-    .some(listener => !listener[kBugginListener]);
+const hasNonBugginEventListeners = (
+  events = [EVENT_UNCAUGHT_EXCEPTION, EVENT_UNHANDLED_REJECTION]
+) => {
+  let hasUncaughtExceptionListener = false;
+  let hasUnhandledRejectionListener = false;
+  if (events.includes(EVENT_UNCAUGHT_EXCEPTION)) {
+    hasUncaughtExceptionListener = process
+      .listeners(EVENT_UNCAUGHT_EXCEPTION)
+      .some(listener => !listener[kBugginListener]);
+  }
+  if (events.includes(EVENT_UNHANDLED_REJECTION)) {
+    hasUnhandledRejectionListener = process
+      .listeners(EVENT_UNHANDLED_REJECTION)
+      .some(listener => !listener[kBugginListener]);
+  }
+  return hasUncaughtExceptionListener || hasUnhandledRejectionListener;
+};
 
+/**
+ * Factory which creates a function to test whether an Error originates from
+ * the package at `root`.
+ * @param {string} rootDirpath - Package root directory
+ */
+const createStackTraceTester = rootDirpath => {
+  const rootRegExp = new RegExp(`${String(rootDirpath)}(?!node_modules)`);
+
+  return /** @param {Error} err */ err => {
+    const parsedStack = parseStacktrace(err.stack);
+    const {file} = parsedStack.shift();
+    return rootRegExp.test(file);
+  };
+};
+
+/**
+ * Creates buggin's global store, or returns a reference to it if it already exists.
+ */
 const install = () => {
   if (global[kBuggin]) {
     return global[kBuggin];
   }
   const buggin = Object.create(null);
-  buggin.listenerStack = [];
   buggin.config = Object.create(null);
   Object.freeze(buggin);
   return buggin;
 };
 
 /**
- * @param {string} url
- * @param {Error} err
+ * Given a "new issue" URL and error, create a link for the user to click on, which
+ * will pre-fill an issue.
+ * @param {string} url - New issue URL
+ * @param {Error} err - Error object
  */
 const buildUrl = (url, err) => {
   const {stringify} = require('querystring');
@@ -54,8 +85,8 @@ This is what I was doing when it happened:
 };
 
 /**
- *
- * @param {any} value
+ * Returns `true` if `value` is an Error, or something close enough.
+ * @param {any} value - Value to test
  * @returns {value is Error}
  */
 const isError = value =>
@@ -64,15 +95,32 @@ const isError = value =>
 const buggin = install();
 
 /**
- *
- * @param {string} name
- * @param {string} url
- * @param {string} root
+ * Creates a process listener for a particular event and package name.
+ * @param {typeof EVENT_UNCAUGHT_EXCEPTION|typeof EVENT_UNHANDLED_REJECTION} event - Event name
+ * @param {string} name - Package name
+ * @param {string} url - "New issue" URL
+ * @param {string} rootDirpath - Root dirpath of package
  * @returns {NodeJS.UncaughtExceptionListener|NodeJS.UnhandledRejectionListener}
  */
-const createUncaughtExceptionListener = (name, url, root) => {
-  const rootRegExp = new RegExp(`${String(root)}(?!node_modules)`);
+const createListener = (event, name, url, rootDirpath) => {
   const useLink = require('supports-hyperlinks').stderr;
+  const testStackTrace = createStackTraceTester(rootDirpath);
+  const passThrough = err => {
+    if (!hasNonBugginEventListeners([event])) {
+      switch (event) {
+        case EVENT_UNCAUGHT_EXCEPTION: {
+          process.nextTick(() => {
+            throw err; // node-do-not-add-exception-line
+          });
+          break;
+        }
+        case EVENT_UNHANDLED_REJECTION: {
+          Promise.reject(err);
+        }
+      }
+    }
+  };
+
   /**
    * @type {NodeJS.UncaughtExceptionListener|NodeJS.UnhandledRejectionListener}
    * @todo the NodeJS.UncaughtExceptionListener type is incorrect and omits the
@@ -80,7 +128,7 @@ const createUncaughtExceptionListener = (name, url, root) => {
    * this case.
    */
   const listener = (err, origin) => {
-    if (isError(err) && rootRegExp.test(err.stack)) {
+    if (isError(err) && testStackTrace(err)) {
       // @ts-ignore
       const isPromise = origin && origin !== 'uncaughtException';
       color.enabled = supportsColor;
@@ -113,35 +161,33 @@ ${color.blackBright('- - - - - - - - - - - - - - - - - -')}
         process.stderr.fd,
         output
       );
+      setup.disable();
     }
-    setup.disable();
-    if (!hasNonBugginEventListeners()) {
-      process.nextTick(() => {
-        throw err; // node-do-not-add-exception-line
-      });
-    }
+    passThrough(err);
   };
   listener[kBugginListener] = true;
   return listener;
 };
 
-const flushListenerStack = () => {
-  do {
-    const name = buggin.listenerStack.pop();
-    const {url, root} = buggin.config[name];
-    process.prependOnceListener(
-      EVENT_UNCAUGHT_EXCEPTION,
-      /**
-       * @type {NodeJS.UncaughtExceptionListener}
-       */
-      (createUncaughtExceptionListener(name, url, root))
-    );
-    process.prependOnceListener(
-      EVENT_UNHANDLED_REJECTION,
-      createUncaughtExceptionListener(name, url, root)
-    );
-    delete buggin.config[name];
-  } while (buggin.listenerStack.length);
+/**
+ * This creates listeners and stores the config globally.
+ * @param {BugginConfig} config
+ */
+const createListeners = ({name, url, root}) => {
+  process.prependOnceListener(
+    EVENT_UNCAUGHT_EXCEPTION,
+    /**
+     * @type {NodeJS.UncaughtExceptionListener}
+     */
+    (createListener(EVENT_UNCAUGHT_EXCEPTION, name, url, root))
+  );
+  // why doesn't this need the annotation and the above does?
+  process.prependOnceListener(
+    EVENT_UNHANDLED_REJECTION,
+    createListener(EVENT_UNHANDLED_REJECTION, name, url, root)
+  );
+
+  buggin.config[name] = {url, root};
 };
 
 /**
@@ -185,22 +231,24 @@ const findEntryPoint = entryPoint => {
     entryPoint = entryPoint.filename;
   }
   if (!entryPoint) {
-    // @ts-ignore
-    let parent = module.parent;
-    while (parent !== null) {
-      parent = parent.parent;
+    let parentPath = parentModule();
+    while (parentPath) {
+      parentPath = parentModule(parentPath);
     }
-    entryPoint = parent.filename;
+    entryPoint = parentPath;
   }
   return (findEntryPoint.cached = entryPoint);
 };
+/**
+ * @type {string}
+ */
 findEntryPoint.cached = undefined;
 
 /**
  * Configures buggin for a module.
  * "This function has high cyclomatic complexity"
  * @param {string|import('type-fest').PackageJson|NodeJS.Module} [pkgValue]
- * @param {Partial<SetupOptions>} [opts]
+ * @param {Partial<BugginSetupOptions>} [opts]
  */
 const setup = (pkgValue, {force = false, name = '', entryPoint} = {}) => {
   /**
@@ -253,13 +301,17 @@ const setup = (pkgValue, {force = false, name = '', entryPoint} = {}) => {
 
   const pkgName = String(name || (pkg && pkg.name));
 
-  buggin.config[pkgName] = {url, root: pkgPath};
+  if (buggin.config[pkgName]) {
+    // TODO warn
+    // don't re-register
+    return;
+  }
 
   if (!force && hasNonBugginEventListeners()) {
     // we can't just throw out of here, since an uncaught exception listener already
     // exists.  I mean, I suppose we COULD, but there's much less of a guarantee that this
     // message would get to the developer.
-    const err = new Error(`process Event listeners already exist which were not added by buggin. This might cause unexpected behavior.
+    const err = new Error(`process Event listener(s) already exist which were not added by buggin. This might cause unexpected behavior.
 Pass option \`{force: true}\` to \`buggin()\` to add listeners anyway.
 `);
     fs.writeSync(
@@ -270,8 +322,7 @@ Pass option \`{force: true}\` to \`buggin()\` to add listeners anyway.
     process.exit(1);
   }
 
-  buggin.listenerStack.push(...Object.keys(buggin.config));
-  flushListenerStack();
+  createListeners({url, root: pkgPath, name: pkgName});
 };
 
 /**
@@ -296,7 +347,14 @@ module.exports = setup;
 setup.buggin = setup;
 
 /**
- * @typedef {Object} SetupOptions
+ * @typedef {Object} BugginConfig
+ * @property {string} url
+ * @property {string} root
+ * @property {string} name
+ */
+
+/**
+ * @typedef {Object} BugginSetupOptions
  * @property {boolean} force
  * @property {string} name
  * @property {string|NodeJS.Module} entryPoint - A path to a package's root directory or a Module
