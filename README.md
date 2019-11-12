@@ -1,6 +1,6 @@
 # buggin
 
-> Help your users report errors! For CLI apps.
+> :bug: help your users report unexpected errors originating in your buggy app :grimacing:
 
 _buggin_ will examine uncaught exceptions for errors coming out of your code, and ask the user to create a bug report. It looks like this:
 

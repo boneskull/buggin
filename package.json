@@ -1,7 +1,7 @@
 {
   "name": "buggin",
   "version": "0.1.2",
-  "description": "Help your users report errors! For CLI apps.",
+  "description": "help your users report unexpected errors originating in your buggy app",
   "main": "src/index.js",
   "scripts": {
     "posttest": "markdownlint --ignore node_modules . && eslint .",
