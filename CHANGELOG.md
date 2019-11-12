@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.4](https://github.com/boneskull/buggin/compare/v0.1.3...v0.1.4) (2019-11-12)
+
+### Bug Fixes
+
+- append "/new" to displayed terminal link ([ca91a50](https://github.com/boneskull/buggin/commit/ca91a501d154fedd17be500140903769a5670e33))
+
 ### [0.1.3](https://github.com/boneskull/buggin/compare/v0.1.2...v0.1.3) (2019-11-12)
 
 ### Features
