@@ -135,7 +135,7 @@ const createListener = (event, name, url, rootDirpath) => {
       let linkString;
       if (useLink) {
         const {link} = require('ansi-escapes');
-        linkString = link(`${url}`, buildUrl(url, err));
+        linkString = link(`${url}/new`, buildUrl(url, err));
       } else {
         linkString = buildUrl(url, err);
       }
