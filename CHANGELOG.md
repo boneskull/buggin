@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.3](https://github.com/boneskull/buggin/compare/v0.1.2...v0.1.3) (2019-11-12)
+
+### Features
+
+- enable "force" option ([d9ec560](https://github.com/boneskull/buggin/commit/d9ec5609dc476b21d9b4b31bdf0060f348d60442))
+- support for unhandled rejections ([ba309de](https://github.com/boneskull/buggin/commit/ba309de3b819caf1c097515902e902bad8136640))
+
+### Bug Fixes
+
+- do not report errors originating from deps of buggin-using pkgs ([1ec84e4](https://github.com/boneskull/buggin/commit/1ec84e40f0aafe9382bf61b59836b7de51e89b23))
+- ensure buggin only rethrows if no non-buggin handlers exist ([52e951a](https://github.com/boneskull/buggin/commit/52e951a13d5adc49198408a6ab1b2d3f9280518f))
+
 ### [0.1.2](https://github.com/boneskull/buggin/compare/v0.1.1...v0.1.2) (2019-11-08)
 
 ### Bug Fixes
