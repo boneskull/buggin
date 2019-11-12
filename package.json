@@ -34,8 +34,8 @@
     "node": ">=8"
   },
   "files": [
-    "src",
-    "assets"
+    "src/*.js",
+    "assets/*.png"
   ],
   "dependencies": {
     "ansi-colors": "^4.1.1",
