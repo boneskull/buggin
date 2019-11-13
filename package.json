@@ -1,6 +1,6 @@
 {
   "name": "buggin",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "help your users report unexpected errors originating in your buggy app",
   "main": "src/index.js",
   "scripts": {

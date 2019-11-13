@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.5](https://github.com/boneskull/buggin/compare/v0.1.4...v0.1.5) (2019-11-13)
+
+### Features
+
+- prefer main module over all others; don't inspect stack traces; add "reject" callback ([8c289fc](https://github.com/boneskull/buggin/commit/8c289fcf3538a77fe926552af619ca795c90f4cb))
+
 ### [0.1.4](https://github.com/boneskull/buggin/compare/v0.1.3...v0.1.4) (2019-11-12)
 
 ### Bug Fixes
