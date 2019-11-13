@@ -2,6 +2,6 @@
 
 module.exports = {
   'forbid-only': Boolean(process.env.CI),
-  timeout: 1000,
-  slow: 500
+  timeout: 2000,
+  slow: 1000
 };
