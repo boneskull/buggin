@@ -3,9 +3,7 @@ const fs = require('fs');
 const emoji = require('node-emoji');
 const color = require('ansi-colors');
 const {sync: readPkg} = require('read-pkg');
-const parentModule = require('parent-module');
 const {stderr: supportsColor} = require('supports-color');
-const {parse: parseStacktrace} = require('stacktrace-parser');
 
 const kBuggin = Symbol('buggin');
 const kBugginListener = Symbol('buggin-listener');
@@ -13,6 +11,7 @@ const bugginPkg = readPkg({cwd: path.join(__dirname, '..')});
 
 const EVENT_UNCAUGHT_EXCEPTION = 'uncaughtException';
 const EVENT_UNHANDLED_REJECTION = 'unhandledRejection';
+
 /**
  * Returns `true` if there have been any non-buggin listeners added to our process events
  */
@@ -35,21 +34,6 @@ const hasNonBugginEventListeners = (
 };
 
 /**
- * Factory which creates a function to test whether an Error originates from
- * the package at `root`.
- * @param {string} rootDirpath - Package root directory
- */
-const createStackTraceTester = rootDirpath => {
-  const rootRegExp = new RegExp(`${String(rootDirpath)}(?!node_modules)`);
-
-  return /** @param {Error} err */ err => {
-    const parsedStack = parseStacktrace(err.stack);
-    const {file} = parsedStack.shift();
-    return rootRegExp.test(file);
-  };
-};
-
-/**
  * Creates buggin's global store, or returns a reference to it if it already exists.
  */
 const install = () => {
@@ -58,7 +42,13 @@ const install = () => {
   }
   const buggin = Object.create(null);
   buggin.config = Object.create(null);
+  Object.defineProperty(buggin.config, 'hasMainListener', {
+    get() {
+      return Object.values(this).some(({isMain}) => isMain);
+    }
+  });
   Object.freeze(buggin);
+  global[kBuggin] = buggin;
   return buggin;
 };
 
@@ -97,14 +87,15 @@ const buggin = install();
 /**
  * Creates a process listener for a particular event and package name.
  * @param {typeof EVENT_UNCAUGHT_EXCEPTION|typeof EVENT_UNHANDLED_REJECTION} event - Event name
- * @param {string} name - Package name
- * @param {string} url - "New issue" URL
- * @param {string} rootDirpath - Root dirpath of package
+ * @param {BugginConfig} config
  * @returns {NodeJS.UncaughtExceptionListener|NodeJS.UnhandledRejectionListener}
  */
-const createListener = (event, name, url, rootDirpath) => {
+const createListener = (event, {name, url, reject = () => false}) => {
   const useLink = require('supports-hyperlinks').stderr;
-  const testStackTrace = createStackTraceTester(rootDirpath);
+
+  /**
+   * @param {Error|{}} err
+   */
   const passThrough = err => {
     if (!hasNonBugginEventListeners([event])) {
       switch (event) {
@@ -128,7 +119,7 @@ const createListener = (event, name, url, rootDirpath) => {
    * this case.
    */
   const listener = (err, origin) => {
-    if (isError(err) && testStackTrace(err)) {
+    if (isError(err) && !reject(err)) {
       // @ts-ignore
       const isPromise = origin && origin !== 'uncaughtException';
       color.enabled = supportsColor;
@@ -173,21 +164,30 @@ ${color.blackBright('- - - - - - - - - - - - - - - - - -')}
  * This creates listeners and stores the config globally.
  * @param {BugginConfig} config
  */
-const createListeners = ({name, url, root}) => {
+const createListeners = config => {
+  if (buggin.config.hasMainListener) {
+    return;
+  }
+  setup.disable();
+
+  const uncaughtExceptionListener = /**
+   * @type {NodeJS.UncaughtExceptionListener}
+   */ (createListener(EVENT_UNCAUGHT_EXCEPTION, config));
   process.prependOnceListener(
     EVENT_UNCAUGHT_EXCEPTION,
-    /**
-     * @type {NodeJS.UncaughtExceptionListener}
-     */
-    (createListener(EVENT_UNCAUGHT_EXCEPTION, name, url, root))
-  );
-  // why doesn't this need the annotation and the above does?
-  process.prependOnceListener(
-    EVENT_UNHANDLED_REJECTION,
-    createListener(EVENT_UNHANDLED_REJECTION, name, url, root)
+    uncaughtExceptionListener
   );
 
-  buggin.config[name] = {url, root};
+  const unhandledRejectionListener = createListener(
+    EVENT_UNHANDLED_REJECTION,
+    config
+  );
+  process.prependOnceListener(
+    EVENT_UNHANDLED_REJECTION,
+    unhandledRejectionListener
+  );
+
+  buggin.config[config.name] = config;
 };
 
 /**
@@ -199,9 +199,8 @@ const readPackage = cwd => {
   const pkgPath = findUp('package.json', {cwd});
   if (pkgPath) {
     const pkg = readPkg({cwd: path.dirname(pkgPath)});
-    return {pkgPath: path.dirname(pkgPath), pkg: normalize(pkg)};
+    return normalizePackage(pkg);
   }
-  return {};
 };
 
 /**
@@ -214,7 +213,7 @@ const isModule = value => value instanceof require('module');
  * @param {object} pkg
  * @returns {import('normalize-package-data').Package}
  */
-const normalize = pkg => {
+const normalizePackage = pkg => {
   require('normalize-package-data')(pkg);
   return pkg;
 };
@@ -224,25 +223,16 @@ const normalize = pkg => {
  * @param {NodeJS.Module|string} [entryPoint]
  */
 const findEntryPoint = entryPoint => {
-  if (findEntryPoint.cached) {
-    return findEntryPoint.cached;
-  }
-  if (isModule(entryPoint)) {
-    entryPoint = entryPoint.filename;
-  }
-  if (!entryPoint) {
-    let parentPath = parentModule();
-    while (parentPath) {
-      parentPath = parentModule(parentPath);
+  if (entryPoint) {
+    if (typeof entryPoint === 'string') {
+      return entryPoint;
     }
-    entryPoint = parentPath;
+    if (isModule(entryPoint)) {
+      return entryPoint.filename;
+    }
   }
-  return (findEntryPoint.cached = entryPoint);
+  return require.main.filename;
 };
-/**
- * @type {string}
- */
-findEntryPoint.cached = undefined;
 
 /**
  * Configures buggin for a module.
@@ -250,45 +240,59 @@ findEntryPoint.cached = undefined;
  * @param {string|import('type-fest').PackageJson|NodeJS.Module} [pkgValue]
  * @param {Partial<BugginSetupOptions>} [opts]
  */
-const setup = (pkgValue, {force = false, name = '', entryPoint} = {}) => {
+const setup = (
+  pkgValue,
+  {force = false, name = '', entryPoint, reject} = {}
+) => {
   /**
    * @type {string}
    */
   let url;
 
   /**
-   * @type {Partial<PackageInfo>}
+   * @type {import('normalize-package-data').Package}
    */
-  let pkgInfo;
+  let pkg;
+
+  let isMain = false;
 
   if (!pkgValue) {
-    pkgInfo = readPackage(findEntryPoint());
+    const tempEntryPoint = findEntryPoint();
+    pkg = readPackage(tempEntryPoint);
+    isMain = tempEntryPoint === require.main.filename;
   } else if (typeof pkgValue === 'string') {
     if (pkgValue.startsWith('http')) {
       url = pkgValue;
     } else if (require('is-email-like')(pkgValue)) {
       url = `mailto:${pkgValue}`;
     }
-    pkgInfo = readPackage(url ? findEntryPoint(entryPoint) : pkgValue);
+    const tempEntryPoint = findEntryPoint(entryPoint);
+    pkg = readPackage(url ? tempEntryPoint : pkgValue);
+    isMain = tempEntryPoint === require.main.filename;
   } else if (isModule(pkgValue)) {
-    pkgInfo = readPackage(
-      entryPoint ? findEntryPoint(entryPoint) : pkgValue.filename
-    );
+    if (entryPoint) {
+      throw new Error(
+        `The "entryPoint" option cannot be used when passing a Module to buggin.`
+      );
+    }
+    pkg = readPackage(pkgValue.filename);
+    isMain = pkgValue === require.main;
   } else if (
     typeof pkgValue === 'object' &&
     (pkgValue.bugs || pkgValue.repository)
   ) {
-    if (typeof entryPoint !== 'string') {
+    if (typeof entryPoint !== 'string' || !isModule(entryPoint)) {
       throw new TypeError(
-        `If provding a parsed package.json object, the "entryPoint" option must be a path to the package root directory.`
+        `If provding a parsed package.json object, the "entryPoint" option must be a path to the package root directory or a Module object.`
       );
     }
-    pkgInfo = {pkg: normalize(pkgValue), pkgPath: entryPoint};
+    pkg = normalizePackage(pkgValue);
+    const tempEntryPoint = findEntryPoint(entryPoint);
+    isMain = tempEntryPoint === require.main.filename;
   } else {
     const {inspect} = require('util');
     throw new TypeError(`Invalid value passed to buggin: ${inspect(pkgValue)}`);
   }
-  const {pkg, pkgPath} = pkgInfo;
 
   if (!pkg) {
     // TODO: probably warn user it didn't work
@@ -322,7 +326,7 @@ Pass option \`{force: true}\` to \`buggin()\` to add listeners anyway.
     process.exit(1);
   }
 
-  createListeners({url, root: pkgPath, name: pkgName});
+  createListeners({url, name: pkgName, reject, isMain});
 };
 
 /**
@@ -341,6 +345,9 @@ setup.disable = () => {
     .forEach(listener => {
       process.removeListener(EVENT_UNHANDLED_REJECTION, listener);
     });
+  Object.keys(buggin.config).forEach(name => {
+    delete buggin.config[name];
+  });
 };
 
 module.exports = setup;
@@ -348,20 +355,23 @@ setup.buggin = setup;
 
 /**
  * @typedef {Object} BugginConfig
- * @property {string} url
- * @property {string} root
- * @property {string} name
+ * @property {string} url - "New issue" URL
+ * @property {string} name - Package name
+ * @property {boolean} isMain - `true` if config is considered to be from "main" package
+ * @property {BugginRejectSelector?} reject - Rejection selector (unselector?)
+ */
+
+/**
+ * An optional callback which returns `true` if the error should be ignored by buggin
+ * @callback BugginRejectSelector
+ * @param {any} value - Typically an `Error`
+ * @returns {boolean} Return `true` if buggin should ignore it
  */
 
 /**
  * @typedef {Object} BugginSetupOptions
+ * @property {BugginRejectSelector} reject
  * @property {boolean} force
  * @property {string} name
  * @property {string|NodeJS.Module} entryPoint - A path to a package's root directory or a Module
- */
-
-/**
- * @typedef {Object} PackageInfo
- * @property {string} pkgPath - Path to package.json
- * @property {import('normalize-package-data').Package} pkg - package.json contents
  */

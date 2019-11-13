@@ -175,7 +175,7 @@ describe('buggin', function() {
   });
 
   describe('when multiple buggin listeners are registered', function() {
-    describe('when package A installs buggin before package B and package B throws', function() {
+    describe('when package A installs buggin before package B (main) and package B throws', function() {
       it('should display a message from package B', async function() {
         return expect(
           run('./fixture/package-b/use-package-a-before'),
@@ -201,8 +201,8 @@ describe('buggin', function() {
       });
     });
 
-    describe('when package B installs buggin before package A and package A throws', function() {
-      it('should display a message from package A', async function() {
+    describe('when package B (main) installs buggin before package A and package A throws', function() {
+      it('should display a message from package B', async function() {
         return expect(
           run('./fixture/package-b/use-package-a-after'),
           'to be rejected with error satisfying',
@@ -211,14 +211,14 @@ describe('buggin', function() {
               .it(
                 'to match',
                 new RegExp(
-                  `The following uncaught exception is likely a bug in ${PACKAGE_A_NAME}`
+                  `The following uncaught exception is likely a bug in ${PACKAGE_B_NAME}`
                 )
               )
               .and('to match', /Error: sync/)
               .and(
                 'not to match',
                 new RegExp(
-                  `The following uncaught exception is likely a bug in ${PACKAGE_B_NAME}`
+                  `The following uncaught exception is likely a bug in ${PACKAGE_A_NAME}`
                 )
               ),
             exitCode: 1
@@ -229,14 +229,13 @@ describe('buggin', function() {
   });
 
   describe('when exception is thrown from a non-buggin-using package', function() {
-    it('should not display buggin message', async function() {
+    it('should display buggin message anyway', async function() {
       return expect(
         run('./fixture/package-b/use-package-c'),
         'to be rejected with error satisfying',
         {
-          stderr: expect.it(
-            'not to match',
-            new RegExp(/The following uncaught exception/)
+          stderr: new RegExp(
+            `The following uncaught exception is likely a bug in ${PACKAGE_B_NAME}`
           ),
           exitCode: 1
         }

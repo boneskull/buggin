@@ -44,9 +44,7 @@
     "is-email-like": "^1.0.0",
     "node-emoji": "^1.10.0",
     "normalize-package-data": "^2.5.0",
-    "parent-module": "^2.0.0",
     "read-pkg": "^5.2.0",
-    "stacktrace-parser": "^0.1.7",
     "supports-color": "^7.1.0",
     "supports-hyperlinks": "^2.0.0"
   },

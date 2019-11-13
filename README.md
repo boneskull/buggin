@@ -1,12 +1,20 @@
 # buggin
 
-> :bug: help your users report unexpected errors originating in your buggy app :grimacing:
+> :bug: help users report errors from your buggy app :grimacing:
 
-_buggin_ will examine uncaught exceptions for errors coming out of your code, and ask the user to create a bug report. It looks like this:
+## What `buggin` Is
+
+`buggin` will intercept uncaught exceptions (and unhandled rejections) from your app, and ask the user to create a bug report. It looks like this:
 
 ![screenshot of output](assets/screenshot.png)
 
 The new issue will be pre-filled with the exception and other info. Neat!
+
+## What `buggin` Ain't
+
+`buggin` will not attempt to determine whether or not the _exception was thrown from your code_.
+
+Exceptions which originate in your package's dependencies _may_ be because of misuse ("user error" on your part) _or_ an actual bug in the dependency--there's really no way to tell. Either way, such a bug should be reported, so a maintainer of a package using `buggin` can triage and determine if it's an "upstream" problem or not.
 
 ## Install
 
@@ -22,19 +30,20 @@ npm i buggin
 
 ### Basic Usage
 
-You only need to do this once. You should do this in your CLI app entry point (the script in your `bin` prop of `package.json`).
+You only need to call `buggin()` once. You should do this in your CLI app entry point (the script in your `bin` prop of `package.json`).
 
 ```js
 #!/usr/bin/env node
+// your other requires go here
 
 require('buggin')(module);
 
-// setup your cli app using yargs, commander, etc.
+// start doing stuff with args
 ```
 
 ### Advanced Usage
 
-#### Use With Existing Uncaught Exception & Unhandled Rejection Listeners
+#### Use With Existing Process Event Listeners
 
 If your module (or some module you're consuming) listens on [Process.uncaughtException](https://nodejs.org/dist/latest-v12.x/docs/api/process.html#process_event_uncaughtexception) or [Process.unhandledRejection](https://nodejs.org/dist/latest-v12.x/docs/api/process.html#process_event_unhandledrejection), `buggin` will refuse to set up its own listeners, print a message to `STDERR` with a warning, and exit the process.
 
@@ -61,6 +70,20 @@ buggin(require('/path/to/package.json'), {entryPoint: '/my/package/root/'});
 buggin('/path/to/package.json');
 ```
 
+#### Ignoring Certain Errors
+
+You can pass `buggin` a selector function to help it determine whether an `Error` should be ignored by `buggin`.
+
+This is helpful if a certain class of `Error`s are _known_ or _expected_. For example, if you expect your app to throw an `Error` with a code property of `EISDIR`, you can use the following code, and `buggin` will not intercept the exception:
+
+```js
+buggin(module, {reject: err => err.code === 'EISDIR'});
+```
+
+> Editor's Note: It's probably a better idea to actually catch these exceptions so they don't become uncaught, right?
+
+Because of the nature of the problem--we're trying to get bug reports for _unexpected_ errors--`buggin` does not support an "accept" selector function, would return `true` if the `Error` was to be handled by `buggin`. To write such a function, you'd need to _know something_ about the errors you want `buggin` handle, and in so, defeating the purpose.
+
 ## How It Works
 
 `buggin` does what it thinks is correct, but its understanding of what "correct" means is up for [further discussion](https://github.com/boneskull/buggin/issues).
@@ -69,10 +92,9 @@ buggin('/path/to/package.json');
 
 `buggin` _prepends_ a listener to both the [Process.uncaughtException](https://nodejs.org/dist/latest-v12.x/docs/api/process.html#process_event_uncaughtexception) and [Process.unhandledRejection](https://nodejs.org/dist/latest-v12.x/docs/api/process.html#process_event_unhandledrejection) events. If one of these events is emitted _with an `Error` argument_, `buggin` will:
 
-1. Make a naive attempt to check whether the `stack` prop of the `Error` contains your package's main module or custom entry point.
-2. Print a notification to `STDERR` and a link to the "new issue" page. If the user's terminal supports it, the URL will be displayed as a clickable link, with the requisite querystring hidden; otherwise the entire URL (with query string) will be displayed for the user to copy/paste.
-3. `buggin` disables _all_ of its listeners (including this one).
-4. `buggin` makes a choice:
+1. Print a notification to `STDERR` and a link to the "new issue" page. If the user's terminal supports it, the URL will be displayed as a clickable link, with the requisite querystring hidden; otherwise the entire URL (with query string) will be displayed for the user to copy/paste.
+2. `buggin` disables _all_ of its listeners (including this one).
+3. `buggin` makes a choice:
    1. If there's no other listener _which was not added by `buggin`_ for the emitted event, the error...
       1. ...if an uncaught exception, will be _rethrown on the next tick_ out of `buggin`'s listener.
       2. ...if an unhandled rejection, will be _re-rejected_ from the handler.
@@ -92,11 +114,11 @@ Most users don't bother to report bugs, so maybe this will help!
 ## Caveats
 
 - This module is _intended_ for use with CLI apps. That said, if you have an idea for better library support, [propose something](https://github.com/boneskull/buggin/issues)!
-- I'm not very confident the stack-sniffing stuff works in the general case. It attempts to match the file where the exception was thrown to a package which registered buggin, but I'm probably missing something here.
+- Only a single package can use `buggin` at once. If the ["main" module](https://nodejs.org/api/modules.html#modules_require_main) uses `buggin`, it will be preferred over all others; any attempts to use `buggin` after (or before!) the "main" module does will be ignored. If the consumer is _not_ the main module, then only _the most recent_ package to call `buggin` "wins."
 - Under normal circumstances, Node.js will exit with code 7 if an uncaught exception is handled and rethrown from the listener. Because `buggin` does not rethrow out of the listener _per se_--and instead rethrows on "next tick"--the process will exit with code 1 (as if no such handling occurred).
 - Behavior on unhandled rejection depends on the version of Node.js used. Node.js v12 added a [`--unhandled-rejections-mode` option](https://nodejs.org/api/cli.html#cli_unhandled_rejections_mode), which allows for greater control over whether an unhandled rejection is considered a "warning" or a nonzero-exit-code-producing error.
-- `buggin` ignores non-`Error` exceptions or rejections. If your code is rejecting with a string value... stop it.
-- `buggin` throws stuff in the `global` context (a singleton prop called `buggin` which stores its configuration), because JavaScript.
+- `buggin` ignores non-`Error` exceptions or rejections.
+- `buggin` throws stuff in the `global` context (a singleton prop called `buggin` which stores its configuration) to deal with multiple usages more gracefully. Deal with it!
 
 ## TODO
 
