@@ -43,6 +43,51 @@ require('buggin')(module);
 
 ### Advanced Usage
 
+#### Custom Messaging
+
+To override the default message, create a `BugginMessageBuilder` function which accepts a `BugginMessageBuilderData` object and returns a `string`. Pass this to `buggin`'s options object via property `builder`.
+
+Example:
+
+```js
+require('buggin')(module, {
+  builder: ({
+    /**
+     * - `true` if error came from a unhandled rejection
+     * @type {boolean}
+     */
+    isPromise,
+    /**
+     * - Project name
+     * @type {string}
+     */
+    projectName,
+    /**
+     * - New issue URL
+     * @type {string}
+     */
+    url,
+    /**
+     * - Original error
+     * @type {Error}
+     */
+    error,
+    /**
+     * - `true` if the terminal supports color
+     * @type {boolean}
+     */
+    supportsColor
+}) => {
+  return `my custom message. please make a new issue here: ${url}`;
+});
+```
+
+Note that the error message and stack trace is _always_ displayed after `buggin`'s output. The idea is that you could use it to _conditionally change_ the message output (if needed).
+
+If you want colors or emoji, you're on your own; `buggin` uses [ansi-colors](https://npm.im/ansi-colors) and [node-emoji](https://npm.im/node-emoji) internally.
+
+Emoji and colors are automatically stripped if the terminal lacks support. Or...that's the idea, anyway. Colors for sure.
+
 #### Use With Existing Process Event Listeners
 
 If your module (or some module you're consuming) listens on [Process.uncaughtException](https://nodejs.org/dist/latest-v12.x/docs/api/process.html#process_event_uncaughtexception) or [Process.unhandledRejection](https://nodejs.org/dist/latest-v12.x/docs/api/process.html#process_event_unhandledrejection), `buggin` will refuse to set up its own listeners, print a message to `STDERR` with a warning, and exit the process.
