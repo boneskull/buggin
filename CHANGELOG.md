@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [0.1.6](https://github.com/boneskull/buggin/compare/v0.1.5...v0.1.6) (2019-12-18)
+
+### Features
+
+- add custom template support; closes [#1](https://github.com/boneskull/buggin/issues/1) ([745a6c2](https://github.com/boneskull/buggin/commit/745a6c2a8d9217aad16d65389e31d33eed44ca23))
+
 ### [0.1.5](https://github.com/boneskull/buggin/compare/v0.1.4...v0.1.5) (2019-11-13)
 
 ### Features
