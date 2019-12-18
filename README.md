@@ -167,7 +167,7 @@ Most users don't bother to report bugs, so maybe this will help!
 
 ## TODO
 
-- Custom output template
+- ~~Custom output template~~ **Update:** Added in v0.1.6!
 - Custom issue template (can we reference an existing GitHub issue template?)
 
 ## License
