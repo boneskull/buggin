@@ -34,8 +34,9 @@
     "node": ">=8"
   },
   "files": [
-    "src/*.js",
-    "assets/*.png",
+    "src/**/*.js",
+    "assets/screenshot.png",
+    "assets/buggin-logo-64.png",
     "types/*.d.ts"
   ],
   "dependencies": {
