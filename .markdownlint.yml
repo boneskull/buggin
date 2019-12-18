@@ -7,3 +7,5 @@ no-bare-urls: false
 line-length: false
 heading-increment: false
 no-duplicate-heading: false
+first-line-heading: false
+blanks-around-headings: false

@@ -4,7 +4,7 @@ const emoji = require('node-emoji');
 const color = require('ansi-colors');
 const {sync: readPkg} = require('read-pkg');
 const {stderr: supportsColor} = require('supports-color');
-
+const defaultBuilder = require('./default-builder');
 const kBuggin = Symbol('buggin');
 const kBugginListener = Symbol('buggin-listener');
 const bugginPkg = readPkg({cwd: path.join(__dirname, '..')});
@@ -90,7 +90,7 @@ const buggin = install();
  * @param {BugginConfig} config
  * @returns {NodeJS.UncaughtExceptionListener|NodeJS.UnhandledRejectionListener}
  */
-const createListener = (event, {name, url, reject = () => false}) => {
+const createListener = (event, {name, url, reject = () => false, builder}) => {
   const useLink = require('supports-hyperlinks').stderr;
 
   /**
@@ -119,40 +119,42 @@ const createListener = (event, {name, url, reject = () => false}) => {
    * this case.
    */
   const listener = (err, origin) => {
-    if (isError(err) && !reject(err)) {
-      // @ts-ignore
-      const isPromise = origin && origin !== 'uncaughtException';
-      color.enabled = supportsColor;
-      let linkString;
-      if (useLink) {
-        const {link} = require('ansi-escapes');
-        linkString = link(`${url}/new`, buildUrl(url, err));
-      } else {
-        linkString = buildUrl(url, err);
+    if (isError(err)) {
+      try {
+        if (!reject(err)) {
+          // typedef is wrong here
+          // @ts-ignore
+          const isPromise = origin && origin !== 'uncaughtException';
+          color.enabled = supportsColor;
+          let linkString;
+          if (useLink) {
+            const {link} = require('ansi-escapes');
+            linkString = link(`${url}/new`, buildUrl(url, err));
+          } else {
+            linkString = buildUrl(url, err);
+          }
+          let output = builder({
+            error: err,
+            isPromise,
+            projectName: name,
+            url: linkString,
+            supportsColor
+          });
+          if (!supportsColor) {
+            output = emoji.strip(output);
+          }
+
+          fs.writeSync(
+            // @ts-ignore
+            process.stderr.fd,
+            output
+          );
+        }
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setup.disable();
       }
-      let output = `${color.blackBright('- - - - - - - - - - - - - - - - - -')}
-
-${emoji.get('exclamation')} The following ${color.bold(
-        isPromise ? 'unhandled rejection' : 'uncaught exception'
-      )} is likely a bug in ${color.yellow(name)}.
-${color.italic('Please')} report the issue at: ${linkString}
-
-Thanks! ${emoji.get('heart')}
-
-  -- ${color.yellow(name)} maintainers
-
-${color.blackBright('- - - - - - - - - - - - - - - - - -')}
-
-`;
-      if (!supportsColor) {
-        output = emoji.strip(output);
-      }
-      fs.writeSync(
-        // @ts-ignore
-        process.stderr.fd,
-        output
-      );
-      setup.disable();
     }
     passThrough(err);
   };
@@ -236,14 +238,13 @@ const findEntryPoint = entryPoint => {
 
 /**
  * Configures buggin for a module.
- * "This function has high cyclomatic complexity"
  * @param {string|import('type-fest').PackageJson|NodeJS.Module} [pkgValue]
  * @param {Partial<BugginSetupOptions>} [opts]
  */
-const setup = (
+function setup(
   pkgValue,
-  {force = false, name = '', entryPoint, reject} = {}
-) => {
+  {force = false, name = '', entryPoint, reject, builder} = {}
+) {
   /**
    * @type {string}
    */
@@ -326,13 +327,19 @@ Pass option \`{force: true}\` to \`buggin()\` to add listeners anyway.
     process.exit(1);
   }
 
-  createListeners({url, name: pkgName, reject, isMain});
-};
+  createListeners({
+    url,
+    name: pkgName,
+    reject,
+    isMain,
+    builder: builder || defaultBuilder
+  });
+}
 
 /**
- * Remove all buggin listeners
+ * Remove all buggin listeners. Called automatically the first time a message is displayed. Disables buggin.
  */
-setup.disable = () => {
+function disable() {
   process
     .listeners(EVENT_UNCAUGHT_EXCEPTION)
     .filter(listener => listener[kBugginListener])
@@ -348,17 +355,19 @@ setup.disable = () => {
   Object.keys(buggin.config).forEach(name => {
     delete buggin.config[name];
   });
-};
+}
 
 module.exports = setup;
-setup.buggin = setup;
+module.exports.disable = disable;
 
 /**
+ * Global configuration object; used internally
  * @typedef {Object} BugginConfig
  * @property {string} url - "New issue" URL
  * @property {string} name - Package name
  * @property {boolean} isMain - `true` if config is considered to be from "main" package
  * @property {BugginRejectSelector?} reject - Rejection selector (unselector?)
+ * @property {BugginMessageBuilder} builder - Message builder function
  */
 
 /**
@@ -369,9 +378,28 @@ setup.buggin = setup;
  */
 
 /**
+ * An optional callback which accepts data and returns a string to be displayed to the user when an error occurs
+ * @callback BugginMessageBuilder
+ * @param {BugginMessageBuilderData} data
+ * @returns {string} Mesasge
+ */
+
+/**
+ * Parameter for a `BugginMessageBuilder` callback
+ * @typedef BugginMessageBuilderData
+ * @property {boolean} isPromise - `true` if error came from a unhandled rejection
+ * @property {string} projectName - Project name
+ * @property {string} url - New issue URL
+ * @property {Error} error - Original error
+ * @property {boolean} supportsColor - `true` if the terminal supports color
+ */
+
+/**
+ * buggin's main setup object, to be called by the library consumer.  All props are optional.
  * @typedef {Object} BugginSetupOptions
- * @property {BugginRejectSelector} reject
- * @property {boolean} force
- * @property {string} name
+ * @property {BugginRejectSelector} reject - A function which accepts an `Error` and returns `true` if buggin should ignore it
+ * @property {boolean} force - Listen on `Process` events (`unhandledRejection`/`uncaughtException`) even if other listeners are present
+ * @property {string} name - Name of project; otherwise derived from `package.json`
  * @property {string|NodeJS.Module} entryPoint - A path to a package's root directory or a Module
+ * @property {BugginMessageBuilder} builder - Message builder function
  */
