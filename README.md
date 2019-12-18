@@ -1,10 +1,10 @@
-# buggin
+# ![buggin logo](assets/buggin-logo-64.png) buggin
 
-> :bug: help users report errors from your buggy app :grimacing:
+> help users report errors from your buggy app :grimacing:
 
 ## What `buggin` Is
 
-`buggin` will intercept uncaught exceptions (and unhandled rejections) from your app, and ask the user to create a bug report. It looks like this:
+`buggin` will intercept uncaught exceptions (and unhandled rejections) from your app, and ask the user to create a bug report. It looks something like this (customizable):
 
 ![screenshot of output](assets/screenshot.png)
 
